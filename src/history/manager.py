@@ -8,6 +8,7 @@ class HistoryDescriptor(object):
     def __get__(self, instance, owner):
         return HistoryManager(self.model, owner, instance)
 
+
 class HistoryManager(models.Manager):
     def __init__(self, model, primary_model, instance=None):
         super(HistoryManager, self).__init__()
@@ -32,8 +33,8 @@ class HistoryManager(models.Manager):
           >>> obj = Obj.objects.get(pk=1)
           >>> obj.history.most_recent()
           <Obj...>
-        
-        If called without an instance, returns the most recent copy of an 
+
+        If called without an instance, returns the most recent copy of an
         instance matching pk.
 
           >>> Obj.history.most_recent(pk=1)
@@ -54,13 +55,13 @@ class HistoryManager(models.Manager):
     def as_of(self, date, pk=None, restore=False):
         """
         If called with an instance, returns an instance of the original model
-        with all the attributes set to what was present on the object on the 
+        with all the attributes set to what was present on the object on the
         date provided.
 
           >>> obj = Obj.objects.get(pk=1)
           >>> obj.history.as_of(datetime.datetime(2000, 1, 1))
           <Obj...>
-        
+
         If called without an instance, has similar behavior but does its lookup
         based on the pk provided.
 
@@ -82,7 +83,7 @@ class HistoryManager(models.Manager):
                 message = "%s(pk=%s) had already been deleted." % \
                     (self.primary_model.__name__, pk)
                 raise self.primary_model.DoesNotExist(message)
-            return version.history_object 
+            return version.history_object
 
     @property
     def created_date(self):
@@ -126,6 +127,7 @@ class HistoryManager(models.Manager):
             return self.primary_model._default_manager.get(pk=pk)
         except self.primary_model.DoesNotExist:
             return self.most_recent(pk=pk)
+
 
 class HistoricalAnnotatingManager(models.Manager):
 

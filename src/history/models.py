@@ -1,12 +1,11 @@
 import copy
-import datetime
 from functools import wraps
 
 from django.contrib.auth.models import User
 import django.db
 from django.db import models
 from django.db.models.base import ModelBase
-from django.db.models.fields.related import add_lazy_relation, RelatedField
+from django.db.models.fields.related import add_lazy_relation
 from django.db.models.loading import app_cache_ready, AppCache
 from django.db.models.related import RelatedObject
 
@@ -25,6 +24,7 @@ HISTORY_TYPES = (
     (DELETED, 'Deleted')
 )
 
+
 class HistoryChange(object):
     def __init__(self, name, from_value, to_value, verbose_name):
         self.name = name
@@ -35,6 +35,7 @@ class HistoryChange(object):
     def __unicode__(self):
         return 'Field "%s" changed from "%s" to "%s"' % \
             (self.name, self.from_value, self.to_value)
+
 
 class HistoricalRecords(object):
     """
@@ -50,11 +51,11 @@ class HistoricalRecords(object):
     - (optional) fields: a list of field names to be checked and saved. If
                          nothing is defined, all fields will be saved.
     """
-    
+
     # meta -> (model, manager_name, history_model)
     REGISTRY = {}
 
-    def __init__(self, 
+    def __init__(self,
                  module=None,
                  fields=None,
                  key_conversions=None,
@@ -77,7 +78,8 @@ class HistoricalRecords(object):
         model = sender
         deps = self.get_field_dependencies(model)
         if deps:
-            count = [len(deps)] 
+            count = [len(deps)]
+
             def dependency_resolved(*args):
                 count[0] = count[0] - 1
                 if count[0] == 0:
@@ -118,7 +120,7 @@ class HistoricalRecords(object):
     def monkey_patch_history_properties(self, cls):
         '''
         Add 'created_date' and 'last_modified_date' properties to the model
-        we're managing history for, calling the underlying manager to get the 
+        we're managing history for, calling the underlying manager to get the
         values.
         '''
         created_date = lambda m: getattr(m, self.manager_name).created_date
@@ -132,7 +134,7 @@ class HistoricalRecords(object):
 
         last_modified_by = lambda m: getattr(m, self.manager_name).last_modified_by
         cls.last_modified_by = property(last_modified_by)
-        
+
     def monkey_patch_name_map(self, cls):
         '''
         Replace init_name_map() with a custom implementation, allowing us to
@@ -173,12 +175,12 @@ class HistoricalRecords(object):
         # update the item name map
         model, mgr, hmodel = HistoricalRecords.REGISTRY.get(meta)
 
-        # inject additional lookup into item name map        
+        # inject additional lookup into item name map
         history_fk = models.ForeignKey(model)
         history_fk.column = meta.pk.get_attname()
         history_fk.model = hmodel
         rel = RelatedObject(model, hmodel, history_fk)
-        
+
         m = dict(map)
         m[mgr] = (rel, None, False, False)
         return m
@@ -189,7 +191,7 @@ class HistoricalRecords(object):
         """
         original_save = model.save
         require_editor = self.require_editor
-        
+
         @wraps(original_save)
         def new_save(self, *args, **kwargs):
             # Save editor in temporary variable, post_save will read this one
@@ -249,7 +251,7 @@ class HistoricalRecords(object):
         """
         Creates a historical model to associate with the model provided.
         """
-        rel_nm = '_%s_history' % model._meta.object_name.lower()
+        # rel_nm = '_%s_history' % model._meta.object_name.lower()
         rel_nm_user = '_%s_history_editor' % model._meta.object_name.lower()
         important_field_names = self.get_important_field_names(model)
 
@@ -286,12 +288,12 @@ class HistoricalRecords(object):
                 get_latest_by = 'history_id'
 
             history_id = models.AutoField(primary_key=True)
-            history_date = models.DateTimeField(default=datetime.datetime.now,
+            history_date = models.DateTimeField(auto_now_add=True,
                                                 db_index=True)
             history_type = models.CharField(max_length=1, choices=HISTORY_TYPES)
-            history_editor = models.ForeignKey(User, null=True, blank=True, 
+            history_editor = models.ForeignKey(User, null=True, blank=True,
                                                related_name=rel_nm_user)
-            primary_model = model            
+            primary_model = model
 
             def __unicode__(self):
                 return u'%s as of %s' % (self.history_object, self.history_date)
@@ -319,7 +321,7 @@ class HistoricalRecords(object):
                     return modified
                 else:
                     # No previous history entry, so actually everything has been modified.
-                    return [ HistoryChange(f, None, getattr(self, f), get_verbose_name(model, f)) for f in important_field_names ]
+                    return [HistoryChange(f, None, getattr(self, f), get_verbose_name(model, f)) for f in important_field_names]
 
         # create the descriptor for 'history_object' with the new HistoryEntry
         HistoryEntry.history_object = HistoricalObjectDescriptor(HistoryEntry)
@@ -329,7 +331,7 @@ class HistoricalRecords(object):
 
     def get_field_dependencies(self, model):
         deps = []
-        for field in model._meta.fields: 
+        for field in model._meta.fields:
             if isinstance(field, models.ForeignKey):
                 deps.append(field)
         return deps
@@ -343,17 +345,17 @@ class HistoricalRecords(object):
 
     def get_important_field_names(self, model):
         """ Return the names of the fields that we care about.  """
-        return [ f.attname for f in self.get_important_fields(model) ]
+        return [f.attname for f in self.get_important_fields(model)]
 
     def copy_fields(self, model):
         """
         Creates copies of the model's original fields, returning
         a dictionary mapping field name to copied field object.
         """
-        fields = { }
+        fields = {}
         for field in self.get_important_fields(model):
             field = copy.copy(field)
-            
+
             # Deal with foreign keys, optionally according to a configured
             # behavior scheme.
             if isinstance(field, models.ForeignKey):
@@ -369,7 +371,7 @@ class HistoricalRecords(object):
                     [setattr(field, key, options[key]) for key in options]
 
                 elif conversion == PRESERVE:
-                    # Preserve ForeignKey relationships with a reasonable 
+                    # Preserve ForeignKey relationships with a reasonable
                     # related_name, fixing a syncdb issue.
                     rel = copy.copy(field.rel)
                     related_name = rel.related_name or field.opts.object_name.lower()
@@ -378,7 +380,7 @@ class HistoricalRecords(object):
                 else:
                     # This should never happen, let's make sure!
                     raise ValueError('Invalid key conversion type')
-            
+
             if isinstance(field, models.AutoField):
                 # The historical model gets its own AutoField, so any
                 # existing one must be replaced with an IntegerField.
@@ -402,7 +404,6 @@ class HistoricalRecords(object):
 
         return fields
 
-
     def post_save(self, instance, created, **kwargs):
         """
         During post-save, create historical record if none has been created before,
@@ -417,7 +418,7 @@ class HistoricalRecords(object):
             for field in self.get_important_field_names(instance):
                 if getattr(instance, field) != getattr(most_recent, field):
                     save = True
-        except instance.DoesNotExist, e:
+        except instance.DoesNotExist:
             pass
 
         # Create historical record
@@ -436,11 +437,11 @@ class HistoricalRecords(object):
         for field in self.get_important_fields(instance):
             '''
             Detect a condition where a cascading delete causes an integrity
-            error because the post_delete trigger tries to create a 
+            error because the post_delete trigger tries to create a
             reference to a now-deleted instance in its history record.  This
             should only be an issue on PRESERVEd foreign keys, since CONVERTed
-            ones won't have an explicit reference.  
-            
+            ones won't have an explicit reference.
+
             Raise a specific exception when the condition is detected, allowing
             post_delete to ignore historical record creation in this case.
             '''
@@ -449,7 +450,7 @@ class HistoricalRecords(object):
                 if conversion == PRESERVE:
                     try:
                         # dereference key to make sure it exists
-                        getattr(instance, field.name) 
+                        getattr(instance, field.name)
                     except field.rel.to.DoesNotExist as e:
                         raise HistoricalIntegrityError(e)
 
@@ -457,14 +458,16 @@ class HistoricalRecords(object):
             attrs[field.attname] = getattr(instance, field.attname)
         manager.create(history_type=type, history_editor=editor, **attrs)
 
+
 class HistoricalObjectDescriptor(object):
     def __init__(self, history_model):
         self.history_model = history_model
 
     def __get__(self, instance, owner):
-        values = dict( (f, getattr(instance, f)) for f in 
-                       self.history_model.important_field_names )
+        values = dict((f, getattr(instance, f)) for f in
+                       self.history_model.important_field_names)
         return self.history_model.primary_model(**values)
+
 
 class HistoricalIntegrityError(django.db.IntegrityError):
     pass
